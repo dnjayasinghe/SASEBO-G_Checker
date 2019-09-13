@@ -2,6 +2,7 @@
 #include <stdlib.h>  // for windows specific keywords in ftd2xx.h
 #include "ftd2xx.h"   // Header file for ftd2xx.lib 
 #include <unistd.h>
+#include <time.h> 
 
 #define  MAX_DEVICES 5
 
@@ -25,9 +26,9 @@ unsigned short SbusRead(FT_HANDLE ft_handle, unsigned short addr)
 			DWORD BytesWritten=0;
 			DWORD BytesReceived=0;
 			
-            wbuf[0] = 0x00;
-            wbuf[1] = (unsigned char)((addr >> 8) & 0xff);
-            wbuf[2] = (unsigned char)(addr & 0xff);
+            		wbuf[0] = 0x00;
+		        wbuf[1] = (unsigned char)((addr >> 8) & 0xff);
+            		wbuf[2] = (unsigned char)(addr & 0xff);
 			
 			ft_status = FT_Write(ft_handle, wbuf, sizeof(wbuf), &BytesWritten);
 			ft_status = FT_Read(ft_handle,wbuf,2,&BytesReceived);
@@ -45,6 +46,13 @@ unsigned short SbusRead(FT_HANDLE ft_handle, unsigned short addr)
             return (unsigned short)(wbuf[0] << 8 | wbuf[1]);
         }
 
+unsigned short  waitDone(FT_HANDLE ft_handle)
+	{
+			// wait until sasebo board has finished processing 
+			while(SbusRead(ft_handle, 0x0002)!=0x0000)
+				usleep(1000000);
+	}
+
 void main()
 {
 	
@@ -54,11 +62,16 @@ void main()
 	int	iNumDevs = 0;
 	int	i, j;
 	int	iDevicesOpen = 0;	
-    int queueChecks = 0;
-    long int timeout = 5; // seconds
-    struct timeval  startTime;
+    	int queueChecks = 0;
+    	long int timeout = 5; // seconds
+    	struct timeval  startTime;
+	unsigned long loop =0;
+	unsigned long LIMIT=10000;
 	
 	unsigned char LatencyTimer = 2;
+	unsigned short pt[8];
+	unsigned short SaSEBOct[8];
+	unsigned short SoftWarect[8];
 
 	
 	for(i = 0; i < MAX_DEVICES; i++) {
@@ -145,21 +158,32 @@ void main()
 
 		SbusWrite(ft_handle, 0x0002, 0x0002);
 	 
-	 sleep(1);
+	 //sleep(1);
+	waitDone(ft_handle);
 	 
-	 // pt write
-	  for(i=0;i<8;i++)
-		SbusWrite(ft_handle, 0x0140+i*2, 0x0000);
-	 //  run
-	 // bus.SbusWrite((uint)Address.CONT, (uint)Cont.RUN);
-	    SbusWrite(ft_handle, 0x0002, 0x0001);
-	   sleep(1);
+	
+	printf("\n\n");
+	for(loop=0;loop<LIMIT;i++)
+	{
+		 // generate random plaintext
+		 for(i=0;i<8;i++)
+		 		pt[i]=rand() % 65536;
+                
+
+		  // pt write
+		  for(i=0;i<8;i++)
+	          SbusWrite(ft_handle, 0x0140+i*2, pt[i]);
+	          //  run
+	          // bus.SbusWrite((uint)Address.CONT, (uint)Cont.RUN);
+	          SbusWrite(ft_handle, 0x0002, 0x0001);
+	          waitDone(ft_handle);
 	 
-	 //ct read
-	  for(i=0;i<8;i++)
-		printf("%04x ",SbusRead(ft_handle, 0x0180+i*2));
+	          //ct read
+	          for(i=0;i<8;i++)
+		      printf("%04x ",SbusRead(ft_handle, 0x0180+i*2));
+		  printf("\n");
 	 
-	 
+	 }
 	 
 	 
     FT_Close(ft_handle);    //Close the connection        
